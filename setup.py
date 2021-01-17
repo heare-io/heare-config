@@ -9,4 +9,4 @@ setup(name='heare-config',
       author_email='seanfitz@heare.io',
       url='https://github.com/heare-io/heare0config',
       packages=['heare.config'],
-)
+      )
