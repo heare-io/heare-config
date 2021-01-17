@@ -12,7 +12,7 @@ script:
 - mypy .
 deploy:
   provider: pypi
-  username: heare-seanfitz
+  username: "__token__"
   password:
     secure: s6K/10etf/vHREb/ULQyVthPu00YsjBFI3lOy3XamGkqSSWxt4OSs0bhqj4x+1funnlncWTwPG/S6kX1z/aCNGzFMkFVqWiCJbaP9OTanbtgsCrNqySL+ZTgOMhn7YLp/yZ6IzgvRIA3es0ErXgOvnGiq1TRJBqLWA+xBoyFiNgTWVJHLcUKuAFiQG9LtA+gxPqASlk52yauVECbRIOo//UuO/Hr7lIr/Re2O9KRt85m8ms9CX9+PeaNaYcmSQgG+T/GnmecwfMry+HnwZ8ZopORjbk8inwdoevyAVebPiyuA/2IrujcPzOfXKW9tBML/08XQp23Zn9YcnEwFr5nYcyUjGdQvhZvjaq9bMnXKoJvOo4nJZY+gEpas4915rAQFUpTAAC40yJq7yyqjHAdgg6/esDP3toldPQznGwJyb4MVTQ89rxfYduWP+7FMip2wgOU67ZyqtvqDjBedCgDtbQMk11BiXxilt3GFner8kdWLsAavWgXXya9dAbBL4ebTxuHBLuNqYYbmczVwA/2ZDG85Vu0IUWLy/k32h8PgTDMn9ut0Hoyug/hKaWqVfqe/HSt3J+MUnvqvuhwh6ncGPZvtO5GufFon7XsPB3QIfzRMybE1Ue2GaApEsbnKFn+wo5zzampU1F5AAw/RJTWVnPW+aKugtZkzL038Ooiqgs=
   skip_existing: true
