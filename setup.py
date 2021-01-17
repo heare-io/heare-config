@@ -7,6 +7,6 @@ setup(name='heare-config',
       description='Heare.io Configuration Utilities',
       author='Sean Fitzgerald',
       author_email='seanfitz@heare.io',
-      url='https://github.com/heare-io/heare0config',
+      url='https://github.com/heare-io/heare-config',
       packages=['heare.config'],
       )
