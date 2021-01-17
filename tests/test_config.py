@@ -37,4 +37,3 @@ class ConfigDefinitionTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             MyConfig.load(args)
-

@@ -11,8 +11,10 @@ class ConfigProperty(object):
     def from_raw_value(self, value: str):
         try:
             return self.formatter(value)
-        except:
-            raise ValueError(f"{value} cannot be parsed as {self.formatter.__name__}")
+        except Exception as e:
+            raise ValueError(
+                f"{value} cannot be parsed as {self.formatter.__name__}"
+            )
 
     def __str__(self):
         return json.dumps(self.__dict__)
@@ -20,7 +22,8 @@ class ConfigProperty(object):
 
 class ConfigDefinition(object):
     @classmethod
-    def load(cls, args=sys.argv):
+    def load(cls, args=None):
+        args = args or sys.argv
         result = cls()
         config_props = {}
         for name, value in cls.__dict__.items():
@@ -34,12 +37,18 @@ class ConfigDefinition(object):
                 arg_value = parts[1]
 
                 if arg_name in config_props:
-                    setattr(result, arg_name, config_props[arg_name].from_raw_value(arg_value))
+                    setattr(
+                        result,
+                        arg_name,
+                        config_props[arg_name].from_raw_value(arg_value)
+                    )
                     del config_props[arg_name]
 
         for name, prop in config_props.items():
             if prop.required and not prop.default:
-                raise ValueError(f"Required config property not satisfied: {name}, {prop}")
+                raise ValueError(
+                    f"Required config property not satisfied: {name}, {prop}"
+                )
 
             setattr(result, name, prop.default)
 
