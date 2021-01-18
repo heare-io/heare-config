@@ -1,6 +1,6 @@
 import json
 import sys
-from typing import TypeVar, Generic, Callable
+from typing import TypeVar, Generic, Callable, Optional
 
 T = TypeVar('T')
 
@@ -8,11 +8,11 @@ T = TypeVar('T')
 class ConfigProperty(Generic[T]):
     def __init__(self,
                  formatter: Callable[[str], T],
-                 default: T = None,
+                 default: Optional[T] = None,
                  required: bool = True):
-        self.formatter = formatter
-        self.default = default
-        self.required = required
+        self.formatter: Callable[[str], T] = formatter
+        self.default: Optional[T] = default
+        self.required: bool = required
 
     def from_raw_value(self, value: str) -> T:
         try:
@@ -25,7 +25,7 @@ class ConfigProperty(Generic[T]):
     def __str__(self):
         return json.dumps(self.__dict__)
 
-    def get(self) -> T:
+    def get(self) -> Optional[T]:
         raise NotImplementedError(
             "ConfigProperty.get is not implemented, intentionally."
         )
@@ -33,18 +33,18 @@ class ConfigProperty(Generic[T]):
 
 class GettableConfig(ConfigProperty[T]):
     def __init__(self,
-                 value: T,
+                 value: Optional[T],
                  formatter: Callable[[str], T],
-                 default: T = None,
+                 default: Optional[T] = None,
                  required: bool = True):
         super().__init__(
             formatter=formatter,
             default=default,
             required=required
         )
-        self.value: T = value
+        self.value: Optional[T] = value
 
-    def get(self) -> T:
+    def get(self) -> Optional[T]:
         return self.value
 
 
