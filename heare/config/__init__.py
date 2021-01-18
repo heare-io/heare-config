@@ -1,23 +1,51 @@
 import json
 import sys
+from typing import TypeVar, Generic, Callable, Optional
+
+T = TypeVar('T')
 
 
-class ConfigProperty(object):
-    def __init__(self, formatter=str, default=None, required=True):
-        self.formatter = formatter
-        self.default = default
-        self.required = required
+class ConfigProperty(Generic[T]):
+    def __init__(self,
+                 formatter: Callable[[str], T],
+                 default: Optional[T] = None,
+                 required: bool = True):
+        self.formatter: Callable[[str], T] = formatter
+        self.default: Optional[T] = default
+        self.required: bool = required
 
-    def from_raw_value(self, value: str):
+    def from_raw_value(self, value: str) -> T:
         try:
             return self.formatter(value)
-        except Exception as e:
+        except Exception as _:
             raise ValueError(
                 f"{value} cannot be parsed as {self.formatter.__name__}"
             )
 
     def __str__(self):
         return json.dumps(self.__dict__)
+
+    def get(self) -> Optional[T]:
+        raise NotImplementedError(
+            "ConfigProperty.get is not implemented, intentionally."
+        )
+
+
+class GettableConfig(ConfigProperty[T]):
+    def __init__(self,
+                 value: Optional[T],
+                 formatter: Callable[[str], T],
+                 default: Optional[T] = None,
+                 required: bool = True):
+        super().__init__(
+            formatter=formatter,
+            default=default,
+            required=required
+        )
+        self.value: Optional[T] = value
+
+    def get(self) -> Optional[T]:
+        return self.value
 
 
 class ConfigDefinition(object):
@@ -35,12 +63,17 @@ class ConfigDefinition(object):
             if len(parts) == 2 and parts[0].startswith('--'):
                 arg_name = parts[0][2:]
                 arg_value = parts[1]
-
+                prop = config_props[arg_name]
                 if arg_name in config_props:
                     setattr(
                         result,
                         arg_name,
-                        config_props[arg_name].from_raw_value(arg_value)
+                        GettableConfig(
+                            value=prop.from_raw_value(arg_value),
+                            formatter=prop.formatter,
+                            default=prop.default,
+                            required=prop.required
+                        )
                     )
                     del config_props[arg_name]
 
@@ -50,6 +83,14 @@ class ConfigDefinition(object):
                     f"Required config property not satisfied: {name}, {prop}"
                 )
 
-            setattr(result, name, prop.default)
+            setattr(
+                result,
+                name, GettableConfig(
+                    value=prop.default,
+                    formatter=prop.formatter,
+                    default=prop.default,
+                    required=prop.required
+                )
+            )
 
         return result
