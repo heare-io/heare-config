@@ -6,7 +6,7 @@ from typing import TypeVar, Generic, Callable, \
 T = TypeVar('T')
 
 
-class ConfigPropertyAliases(object):
+class SettingAliases(object):
     def __init__(self,
                  flag: Optional[str] = None,
                  short_flag: Optional[str] = None,
@@ -35,12 +35,12 @@ class JsonEncoder(JSONEncoder):
                or 'unserializable'
 
 
-class ConfigProperty(Generic[T]):
+class Setting(Generic[T]):
     def __init__(self,
                  formatter: Callable[[str], T],
                  default: Optional[T] = None,
                  required: bool = True,
-                 aliases: Optional[ConfigPropertyAliases] = None):
+                 aliases: Optional[SettingAliases] = None):
         """
         Specify the schema for an individual configuration property.
         :param formatter: parses a string value into
@@ -51,7 +51,7 @@ class ConfigProperty(Generic[T]):
         self.formatter: Callable[[str], T] = formatter
         self.default: Optional[T] = default
         self.required: bool = required
-        self.aliases: Optional[ConfigPropertyAliases] = aliases
+        self.aliases: Optional[SettingAliases] = aliases
 
     def from_raw_value(self, value: str) -> T:
         try:
@@ -68,7 +68,7 @@ class ConfigProperty(Generic[T]):
         return self.default
 
 
-class GettableConfig(ConfigProperty[T]):
+class GettableSetting(Setting[T]):
     def __init__(self,
                  value: Optional[T],
                  formatter: Callable[[str], T],
@@ -127,62 +127,62 @@ def parse_cli_arguments(args: List[str]) -> \
 ##################################################################
 
 
-class ConfigDefinition(object):
+class SettingsDefinition(object):
     @classmethod
     def load(cls, args=None):
         args = args or sys.argv
         result = cls()
-        config_prop_specs = {}
-        config_spec_name_mapping = {}
+        setting_specs = {}
+        setting_name_mapping = {}
         for name, value in cls.__dict__.items():
-            if isinstance(value, ConfigProperty):
-                config_prop_specs[name] = (name, value)
-                config_spec_name_mapping[name] = name
+            if isinstance(value, Setting):
+                setting_specs[name] = (name, value)
+                setting_name_mapping[name] = name
                 aliases = value.aliases
                 if aliases:
-                    config_spec_name_mapping[aliases.flag or name] = name
-                    config_spec_name_mapping[aliases.short_flag or name] = name
+                    setting_name_mapping[aliases.flag or name] = name
+                    setting_name_mapping[aliases.short_flag or name] = name
 
         cli_args, positional = parse_cli_arguments(args)
 
-        intermediate_results: Dict[str, List[GettableConfig]] = dict()
+        intermediate_results: Dict[str, List[GettableSetting]] = dict()
 
         for name_or_flag, value in cli_args:
-            resolved_name = config_spec_name_mapping[name_or_flag]
-            arg_name, prop_spec = config_prop_specs[resolved_name]
+            resolved_name = setting_name_mapping[name_or_flag]
+            arg_name, setting_spec = setting_specs[resolved_name]
             intermediate_result_list = intermediate_results.get(arg_name, [])
             if not intermediate_result_list:
                 intermediate_results[arg_name] = intermediate_result_list
 
             intermediate_results[arg_name].append(
-                GettableConfig(
-                    value=prop_spec.from_raw_value(value),
-                    formatter=prop_spec.formatter,
-                    default=prop_spec.default,
-                    required=prop_spec.required
+                GettableSetting(
+                    value=setting_spec.from_raw_value(value),
+                    formatter=setting_spec.formatter,
+                    default=setting_spec.default,
+                    required=setting_spec.required
                 )
             )
 
         # apply intermediate results to a fully hydrated config object
-        for name, (_, prop_spec) in config_prop_specs.items():
-            prop_candidates = intermediate_results.get(name, [])
+        for name, (_, setting_spec) in setting_specs.items():
+            setting_candidates = intermediate_results.get(name, [])
 
-            if prop_spec.required and \
-                    not (prop_candidates or prop_spec.default):
+            if setting_spec.required and \
+                    not (setting_candidates or setting_spec.default):
                 raise ValueError(
-                    f"Required config not satisfied: {name}, {prop_spec}"
+                    f"Required config not satisfied: {name}, {setting_spec}"
                 )
 
-            value = prop_spec.default if \
-                not prop_candidates else prop_candidates[-1].value
+            value = setting_spec.default if \
+                not setting_candidates else setting_candidates[-1].value
 
             setattr(
                 result,
-                name, GettableConfig(
-                    value=prop_spec.from_raw_value(value),
-                    formatter=prop_spec.formatter,
-                    default=prop_spec.default,
-                    required=prop_spec.required
+                name, GettableSetting(
+                    value=setting_spec.from_raw_value(value),
+                    formatter=setting_spec.formatter,
+                    default=setting_spec.default,
+                    required=setting_spec.required
                 )
             )
 
