@@ -4,7 +4,7 @@ from heare.config import SettingsDefinition, \
     Setting, SettingAliases
 
 
-class ConfigDefinitionTests(unittest.TestCase):
+class SettingsDefinitionTests(unittest.TestCase):
     def test_load(self):
         class MySettings(SettingsDefinition):
             foo = Setting(str)
@@ -55,11 +55,44 @@ class ConfigDefinitionTests(unittest.TestCase):
 
         result = MySettings.load(args)
 
-        self.assertTrue(result.bar)
+        self.assertTrue(result.bar.get())
+        self.assertEqual('bar', result.foo.get())
+
+    def test_env_variables(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str,
+                          aliases=SettingAliases(env_variable='FOO'))
+            bar = Setting(bool,
+                          aliases=SettingAliases(env_variable='BAR'))
+
+        result = MySettings.load(args=[], env={'FOO': 'bar', 'BAR': 'TRUE'})
+
+        self.assertTrue(result.bar.get())
+        self.assertEqual('bar', result.foo.get())
+
+    def test_env_variable_precedence(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str,
+                          aliases=SettingAliases(
+                              short_flag='f',
+                              env_variable='FOO'))
+            bar = Setting(bool,
+                          aliases=SettingAliases(
+                              short_flag='b',
+                              env_variable='BAR'))
+
+        args = [
+            '-f', 'bar',
+            '-b'
+        ]
+
+        result = MySettings.load(args=args, env={'FOO': 'bar', 'BAR': ''})
+
+        self.assertFalse(result.bar.get())
         self.assertEqual('bar', result.foo.get())
 
 
-class ConfigTypingTests(unittest.TestCase):
+class SettingTypingTests(unittest.TestCase):
     def test_typing(self):
         class MySettings(SettingsDefinition):
             foo = Setting(str)
