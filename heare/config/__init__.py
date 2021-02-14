@@ -19,7 +19,7 @@ class SettingAliases(object):
             match the schema property name
         :param short_flag: maps short-flag name for CLI parsing
         :param env_variable: maps an environment variable
-            name to the property (TODO)
+            name to the property
         :param dotted_name: maps a dotted name to a config tree
             from a parsed json/ini file
         """
@@ -136,6 +136,7 @@ class SettingsDefinition(object):
         result = cls()
         setting_specs = {}
         setting_name_mapping = {}
+        setting_env_mapping = {}
         for name, value in cls.__dict__.items():
             if isinstance(value, Setting):
                 setting_specs[name] = (name, value)
@@ -144,19 +145,25 @@ class SettingsDefinition(object):
                 if aliases:
                     setting_name_mapping[aliases.flag or name] = name
                     setting_name_mapping[aliases.short_flag or name] = name
+                    if aliases.env_variable:
+                        setting_env_mapping[aliases.env_variable] = name
 
         cli_args, positional = parse_cli_arguments(args)
 
         intermediate_results: Dict[str, List[GettableSetting]] = dict()
 
+        # apply cli values to intermediate_results
         for name_or_flag, value in cli_args:
-            resolved_name = setting_name_mapping[name_or_flag]
+            resolved_name = setting_name_mapping.get(name_or_flag)
+            if not resolved_name:
+                # skipping unknown
+                continue
             arg_name, setting_spec = setting_specs[resolved_name]
             intermediate_result_list = intermediate_results.get(arg_name, [])
             if not intermediate_result_list:
                 intermediate_results[arg_name] = intermediate_result_list
 
-            intermediate_results[arg_name].append(
+            intermediate_result_list.append(
                 GettableSetting(
                     value=setting_spec.from_raw_value(value),
                     formatter=setting_spec.formatter,
@@ -164,6 +171,25 @@ class SettingsDefinition(object):
                     required=setting_spec.required
                 )
             )
+
+        # apply env_variables to intermediate results
+        for env_name, resolved_name in setting_env_mapping.items():
+            env_value = env.get(env_name)
+            if env_value is not None:
+                arg_name, setting_spec = setting_specs[resolved_name]
+                intermediate_result_list = intermediate_results.get(arg_name,
+                                                                    [])
+                if not intermediate_result_list:
+                    intermediate_results[arg_name] = intermediate_result_list
+
+                intermediate_result_list.append(
+                    GettableSetting(
+                        value=setting_spec.from_raw_value(env_value),
+                        formatter=setting_spec.formatter,
+                        default=setting_spec.default,
+                        required=setting_spec.required
+                    )
+                )
 
         # apply intermediate results to a fully hydrated config object
         for name, (_, setting_spec) in setting_specs.items():
