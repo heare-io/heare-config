@@ -1,6 +1,7 @@
 import unittest
 
-from heare.config import ConfigDefinition, ConfigProperty
+from heare.config import ConfigDefinition, \
+    ConfigProperty, ConfigPropertyAliases
 
 
 class ConfigDefinitionTests(unittest.TestCase):
@@ -20,13 +21,15 @@ class ConfigDefinitionTests(unittest.TestCase):
         class MyConfig(ConfigDefinition):
             foo = ConfigProperty(str)
             bar = ConfigProperty(float, 1.0)
+            baz = ConfigProperty(bool, default=False)
 
-        args = ['--foo=bar']
+        args = ['--foo=bar', '--baz']
 
         result = MyConfig.load(args)
         self.assertTrue(isinstance(result, MyConfig))
         self.assertEqual('bar', result.foo.get())
         self.assertEqual(1.0, result.bar.get())
+        self.assertTrue(result.baz.get())
 
     def test_bad_parser(self):
         class MyConfig(ConfigDefinition):
@@ -37,6 +40,23 @@ class ConfigDefinitionTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             MyConfig.load(args)
+
+    def test_config_aliases(self):
+        class MyConfig(ConfigDefinition):
+            foo = ConfigProperty(str,
+                                 aliases=ConfigPropertyAliases(short_flag='f'))
+            bar = ConfigProperty(bool,
+                                 aliases=ConfigPropertyAliases(short_flag='b'))
+
+        args = [
+            '-f', 'bar',
+            '-b'
+        ]
+
+        result = MyConfig.load(args)
+
+        self.assertTrue(result.bar)
+        self.assertEqual('bar', result.foo.get())
 
 
 class ConfigTypingTests(unittest.TestCase):
