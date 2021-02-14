@@ -1,3 +1,4 @@
+import os
 import sys
 from json import JSONEncoder
 from typing import TypeVar, Generic, Callable, \
@@ -129,8 +130,9 @@ def parse_cli_arguments(args: List[str]) -> \
 
 class SettingsDefinition(object):
     @classmethod
-    def load(cls, args=None):
+    def load(cls, args=None, env=None):
         args = args or sys.argv
+        env = env or os.environ
         result = cls()
         setting_specs = {}
         setting_name_mapping = {}
