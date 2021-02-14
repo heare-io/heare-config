@@ -41,6 +41,16 @@ class SettingsDefinitionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MySettings.load(args)
 
+    def test_unkown_flags_ignored(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str)
+
+        args = ['--foo=bar', '--bar=2.0']
+
+        result = MySettings.load(args)
+        self.assertTrue(isinstance(result, MySettings))
+        self.assertEqual('bar', result.foo.get())
+
     def test_config_aliases(self):
         class MySettings(SettingsDefinition):
             foo = Setting(str,
