@@ -86,6 +86,9 @@ class GettableSetting(Setting[T]):
         return self.value
 
 
+#############################################
+# CLI parsing functions
+#############################################
 CliArgTuple = Tuple[str, Union[str, bool]]
 
 
@@ -118,6 +121,20 @@ def parse_cli_arguments(args: List[str]) -> \
     return results, positional
 
 
+#############################################
+# Config File Parsing Functions
+#############################################
+def search_for_config(directory_name,
+                      extensions=['.json', '.conf', '.ini']):
+    for root, subdirs, files in os.walk(directory_name):
+        for f in files:
+            if os.path.splitext(f) in extensions:
+                yield os.path.join(root, f)
+
+def parse_ini():
+    pass
+
+
 ##################################################################
 # Sanity block
 #
@@ -130,13 +147,16 @@ def parse_cli_arguments(args: List[str]) -> \
 
 class SettingsDefinition(object):
     @classmethod
-    def load(cls, args=None, env=None):
+    def load(cls, args=None, env=None, files_or_directories=None):
         args = args or sys.argv
         env = env or os.environ
         result = cls()
         setting_specs = {}
         setting_name_mapping = {}
         setting_env_mapping = {}
+
+        intermediate_results: Dict[str, List[GettableSetting]] = dict()
+
         for name, value in cls.__dict__.items():
             if isinstance(value, Setting):
                 setting_specs[name] = (name, value)
@@ -150,7 +170,24 @@ class SettingsDefinition(object):
 
         cli_args, positional = parse_cli_arguments(args)
 
-        intermediate_results: Dict[str, List[GettableSetting]] = dict()
+
+        # use configparser to load config files (either dict or ini)
+        extensions = ['.json', '.conf', '.ini']
+        resolved_files = []
+        for path in (files_or_directories or []):
+            if not os.path.exists(path):
+                continue
+            if os.path.isfile(path):
+                ext = os.path.splitext(path)
+                if ext not in extensions:
+                    continue
+                resolved_files.append(path)
+            elif os.path.isdir(path):
+                resolved_files += list(search_for_config(path, extensions))
+
+
+
+
 
         # apply cli values to intermediate_results
         for name_or_flag, value in cli_args:

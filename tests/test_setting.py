@@ -101,6 +101,14 @@ class SettingsDefinitionTests(unittest.TestCase):
         self.assertFalse(result.bar.get())
         self.assertEqual('bar', result.foo.get())
 
+    def test_config_file(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str,
+                          aliases=SettingAliases(
+                              dotted_name="default.foo"
+                          ))
+        results = MySettings.load(files_or_directories=
+                                  ['tmp.conf'])
 
 class SettingTypingTests(unittest.TestCase):
     def test_typing(self):

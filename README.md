@@ -7,9 +7,9 @@ The ConfigProperty class will infer the type of the property from the default pa
 
 ## Command line parsing
 ```python3
-class MyConfig(ConfigDefinition):
-    foo = ConfigProperty(str)
-    bar = ConfigProperty(float, default=1.0)
+class MyConfig(SettingsDefinition):
+    foo = Setting(str)
+    bar = Setting(float, default=1.0)
 ```
 
 When invoked from the command line...
@@ -19,3 +19,4 @@ When invoked from the command line...
 ```
 
 The parser will create an instance of MyConfig with GettableConfig objects, populated accordingly.
+
