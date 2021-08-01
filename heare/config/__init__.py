@@ -1,8 +1,12 @@
+import copy
 import os
+import re
 import sys
+from abc import ABCMeta, abstractmethod
 from json import JSONEncoder
+from os import _Environ
 from typing import TypeVar, Generic, Callable, \
-    Optional, List, Tuple, Union, Dict
+    Optional, List, Tuple, Union, Dict, Generator, Set
 
 T = TypeVar('T')
 
@@ -11,8 +15,7 @@ class SettingAliases(object):
     def __init__(self,
                  flag: Optional[str] = None,
                  short_flag: Optional[str] = None,
-                 env_variable: Optional[str] = None,
-                 dotted_name: Optional[str] = None):
+                 env_variable: Optional[str] = None):
         """
         Specify aliases for a config property
         :param flag: an alternate flag name that does not
@@ -20,13 +23,14 @@ class SettingAliases(object):
         :param short_flag: maps short-flag name for CLI parsing
         :param env_variable: maps an environment variable
             name to the property
-        :param dotted_name: maps a dotted name to a config tree
-            from a parsed json/ini file
         """
         self.flag: Optional[str] = flag
         self.short_flag: Optional[str] = short_flag
         self.env_variable: Optional[str] = env_variable
-        self.dotted_name: Optional[str] = dotted_name
+
+    def labels(self) -> List[str]:
+        return list(filter(None,
+                           [self.flag, self.short_flag, self.env_variable]))
 
 
 class JsonEncoder(JSONEncoder):
@@ -47,7 +51,6 @@ class Setting(Generic[T]):
         :param formatter: parses a string value into
         :param default: default value if no configuration is specified
         :param required: indicates that this property is required
-        :param aliases: a {@code heare.config.ConfigPropertyAliases} object
         """
         self.formatter: Callable[[str], T] = formatter
         self.default: Optional[T] = default
@@ -123,73 +126,156 @@ def parse_cli_arguments(args: List[str]) -> \
 #
 # We _will_ be parsing multiple sources
 # Each source parser will yield a mapping informed by the schema
-# The schema, per ConfigProperty, will enforce precedence from the
+# The schema, per Setting, will enforce precedence from the
 # set of results
 ##################################################################
 
+class RawSetting(object):
+    def __init__(self, raw_name: str, raw_value: Union[str, bool]):
+        self.raw_name: str = raw_name
+        self.raw_value: Union[str, bool] = raw_value
+
+
+class SettingsSource(metaclass=ABCMeta):
+    @abstractmethod
+    def get_raw_setting(self,
+                        namespace: Optional[str],
+                        canonical_name: str) -> Optional[RawSetting]:
+        raise NotImplementedError()
+
+
+class CLISettingsSource(SettingsSource):
+    def __init__(self, args: List[str] = sys.argv):
+        self.args = args
+        self.raw_settings = {rs.raw_name: rs for rs in self.load()}
+
+    def load(self) -> List[RawSetting]:
+        flag_arguments, positional = parse_cli_arguments(self.args)
+        results: List[RawSetting] = []
+        for flag_arg in flag_arguments:
+            results.append(RawSetting(flag_arg[0], flag_arg[1]))
+
+        return results
+
+    def get_raw_setting(self,
+                        namespace: Optional[str],
+                        name_or_alias: str) -> Optional[RawSetting]:
+        """
+
+        :param namespace: namespace for config name_or_alias, typically maps to
+            a SettingsDefinition class name
+        :param name_or_alias: a string name or alias, soruces from either
+            SettingsDefinition property name, or a defined alias.
+        :return: RawSetting if found, else None
+        """
+        result: Optional[RawSetting] = None
+
+        if namespace:
+            canonical_form = f"{namespace}.{name_or_alias}"
+            result = self.raw_settings.get(canonical_form)
+
+        if not result:
+            # prop name only
+            result = self.raw_settings.get(name_or_alias)
+
+        if not result:
+            # flag
+            result = self.raw_settings.get(name_or_alias[0])
+
+        return result
+
+
+def camel_to_big_snake(name):
+    name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).upper()
+
+
+FlexibleEnvironType = Union[_Environ, Dict[str, str]]
+
+
+class EnvironSettingsSource(SettingsSource):
+    def __init__(self, environ: FlexibleEnvironType):
+        self.raw_settings = copy.copy(environ)
+
+    def get_raw_setting(self,
+                        namespace: Optional[str],
+                        name_or_alias: str) -> Optional[RawSetting]:
+        result: Optional[RawSetting] = None
+        formatted_name_or_alias = camel_to_big_snake(name_or_alias)
+
+        # fully qualified name
+        if namespace:
+            formatted_namespace = camel_to_big_snake(namespace)
+            full_name = f"{formatted_namespace}__{formatted_name_or_alias}"
+            if full_name in self.raw_settings:
+                result = RawSetting(full_name, self.raw_settings[full_name])
+
+        # check for short name
+        if formatted_name_or_alias in self.raw_settings:
+            result = RawSetting(
+                formatted_name_or_alias,
+                self.raw_settings[formatted_name_or_alias])
+
+        return result
+
 
 class SettingsDefinition(object):
+    @staticmethod
+    def discover() -> Set[type]:
+        subclasses: Set[type] = set()
+        work = [SettingsDefinition]
+        while work:
+            parent = work.pop()
+            for child in parent.__subclasses__():
+                if child not in subclasses:
+                    subclasses.add(child)
+                    work.append(child)
+        return subclasses
+
     @classmethod
-    def load(cls, args=None, env=None):
-        args = args or sys.argv
-        env = env or os.environ
-        result = cls()
+    def load(cls,
+             args: List[str] = sys.argv,
+             env: FlexibleEnvironType = os.environ):
+        sources: List[SettingsSource] = []
+        if env:
+            sources.append(EnvironSettingsSource(env))
+        if args:
+            sources.append(CLISettingsSource(args))
+
+        return SettingsDefinition.load_for_class(cls, sources)
+
+    @classmethod
+    def load_for_class(cls, settings_class,
+                       settings_sources: List[SettingsSource]):
+        result = settings_class()
         setting_specs = {}
-        setting_name_mapping = {}
-        setting_env_mapping = {}
-        for name, value in cls.__dict__.items():
+        intermediate_results: Dict[str, List[RawSetting]] = dict()
+
+        for name, value in settings_class.__dict__.items():
             if isinstance(value, Setting):
                 setting_specs[name] = (name, value)
-                setting_name_mapping[name] = name
-                aliases = value.aliases
-                if aliases:
-                    setting_name_mapping[aliases.flag or name] = name
-                    setting_name_mapping[aliases.short_flag or name] = name
-                    if aliases.env_variable:
-                        setting_env_mapping[aliases.env_variable] = name
 
-        cli_args, positional = parse_cli_arguments(args)
-
-        intermediate_results: Dict[str, List[GettableSetting]] = dict()
-
-        # apply cli values to intermediate_results
-        for name_or_flag, value in cli_args:
-            resolved_name = setting_name_mapping.get(name_or_flag)
-            if not resolved_name:
-                # skipping unknown
+        for name, value in settings_class.__dict__.items():
+            if not isinstance(value, Setting):
                 continue
-            arg_name, setting_spec = setting_specs[resolved_name]
-            intermediate_result_list = intermediate_results.get(arg_name, [])
-            if not intermediate_result_list:
-                intermediate_results[arg_name] = intermediate_result_list
+            intermediate_results[name] = []
 
-            intermediate_result_list.append(
-                GettableSetting(
-                    value=setting_spec.from_raw_value(value),
-                    formatter=setting_spec.formatter,
-                    default=setting_spec.default,
-                    required=setting_spec.required
-                )
-            )
+            raw_setting: Optional[RawSetting] = None
+            for source in settings_sources:
+                aliases = value.aliases.labels() if value.aliases else []
+                # try aliases first if specified
+                for alias in aliases:
+                    raw_setting = source.get_raw_setting(
+                        settings_class.__name__, alias)
+                    if raw_setting:
+                        break
 
-        # apply env_variables to intermediate results
-        for env_name, resolved_name in setting_env_mapping.items():
-            env_value = env.get(env_name)
-            if env_value is not None:
-                arg_name, setting_spec = setting_specs[resolved_name]
-                intermediate_result_list = intermediate_results.get(arg_name,
-                                                                    [])
-                if not intermediate_result_list:
-                    intermediate_results[arg_name] = intermediate_result_list
+                if not raw_setting:
+                    raw_setting = source.get_raw_setting(
+                        settings_class.__name__, name)
 
-                intermediate_result_list.append(
-                    GettableSetting(
-                        value=setting_spec.from_raw_value(env_value),
-                        formatter=setting_spec.formatter,
-                        default=setting_spec.default,
-                        required=setting_spec.required
-                    )
-                )
+                if raw_setting:
+                    intermediate_results[name].append(raw_setting)
 
         # apply intermediate results to a fully hydrated config object
         for name, (_, setting_spec) in setting_specs.items():
@@ -202,7 +288,7 @@ class SettingsDefinition(object):
                 )
 
             value = setting_spec.default if \
-                not setting_candidates else setting_candidates[-1].value
+                not setting_candidates else setting_candidates[0].raw_value
 
             setattr(
                 result,
