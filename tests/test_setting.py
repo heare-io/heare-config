@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 
 from heare.config import SettingsDefinition, \
     Setting, SettingAliases
@@ -100,6 +101,31 @@ class SettingsDefinitionTests(unittest.TestCase):
 
         self.assertFalse(result.bar.get())
         self.assertEqual('bar', result.foo.get())
+
+    def test_config_file_parser(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str,
+                          aliases=SettingAliases(
+                              short_flag='f',
+                              env_variable='FOO'))
+            bar = Setting(float,
+                          aliases=SettingAliases(
+                              short_flag='b',
+                              env_variable='BAR'))
+
+        with tempfile.NamedTemporaryFile() as config_file:
+            config_file.write(b"""
+            [MySettings]
+            foo = bar
+            bar = 1.0
+            """)
+
+            config_file.flush()
+
+            result = MySettings.load(config_files=[config_file.name])
+
+            self.assertEqual(result.foo.get(), "bar")
+            self.assertEqual(result.bar.get(), 1.0)
 
 
 class SettingTypingTests(unittest.TestCase):

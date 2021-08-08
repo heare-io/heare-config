@@ -7,6 +7,7 @@ from json import JSONEncoder
 from os import _Environ
 from typing import TypeVar, Generic, Callable, \
     Optional, List, Tuple, Union, Dict, Generator, Set
+import configparser
 
 T = TypeVar('T')
 
@@ -219,6 +220,35 @@ class EnvironSettingsSource(SettingsSource):
         return result
 
 
+class ConfigFileSource(SettingsSource):
+    @staticmethod
+    def from_filename(filename: str) -> 'ConfigFileSource':
+        config_parser = configparser.ConfigParser()
+        config_parser.read(filename)
+        return ConfigFileSource(config_parser)
+
+    def from_string(self, content: str) -> 'ConfigFileSource':
+        config_parser = configparser.ConfigParser()
+        config_parser.read_string(content)
+        return ConfigFileSource(config_parser)
+
+    def __init__(self, config_parser: configparser.ConfigParser):
+        self.config_parser = config_parser
+
+    def get_raw_setting(self,
+                        namespace: Optional[str],
+                        canonical_name: str) -> Optional[RawSetting]:
+        if namespace is None:
+            return None
+
+        value: Optional[str] = \
+            self.config_parser.get(namespace, canonical_name, fallback=None)
+        if value is None:
+            return None
+        else:
+            return RawSetting(canonical_name, value)
+
+
 class SettingsDefinition(object):
     @staticmethod
     def discover() -> Set[type]:
@@ -235,8 +265,13 @@ class SettingsDefinition(object):
     @classmethod
     def load(cls,
              args: List[str] = sys.argv,
-             env: FlexibleEnvironType = os.environ):
+             env: FlexibleEnvironType = os.environ,
+             config_files: List[str] = []):
         sources: List[SettingsSource] = []
+
+        for file in config_files:
+            if os.path.exists(file):
+                sources.append(ConfigFileSource.from_filename(file))
         if env:
             sources.append(EnvironSettingsSource(env))
         if args:
