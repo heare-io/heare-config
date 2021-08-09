@@ -10,7 +10,7 @@ script:
 - pytest
 - pycodestyle .
 - mypy .
-- rst2html.py --exit-status 3 --report 3 README.md
+- rst2html.py --exit-status 3 --report 3 README.md > /dev/null
 deploy:
   provider: pypi
   username: "__token__"
