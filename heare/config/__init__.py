@@ -227,7 +227,8 @@ class ConfigFileSource(SettingsSource):
         config_parser.read(filename)
         return ConfigFileSource(config_parser)
 
-    def from_string(self, content: str) -> 'ConfigFileSource':
+    @staticmethod
+    def from_string(content: str) -> 'ConfigFileSource':
         config_parser = configparser.ConfigParser()
         config_parser.read_string(content)
         return ConfigFileSource(config_parser)
