@@ -1,4 +1,4 @@
 pytest
 pycodestyle
 mypy
-rst2html
+docutils
