@@ -36,7 +36,7 @@ class SettingAliases(object):
 
 class JsonEncoder(JSONEncoder):
     def default(self, o):
-        return getattr(o, '__name__', '')\
+        return getattr(o, '__name__', '') \
                or getattr(o, '__dict__', '') \
                or 'unserializable'
 
@@ -105,7 +105,7 @@ def parse_cli_arguments(args: List[str]) -> \
             flag = parts[0].lstrip('-')
             if len(parts) == 1:
                 is_boolean_flag = (idx == len(args) - 1) \
-                                  or args[idx+1].startswith('-')
+                                  or args[idx + 1].startswith('-')
                 if is_boolean_flag:
                     value = "" if flag.startswith('no-') else "TRUE"
                     if not value:
@@ -141,7 +141,18 @@ class SettingsSource(metaclass=ABCMeta):
     @abstractmethod
     def get_raw_setting(self,
                         namespace: Optional[str],
-                        canonical_name: str) -> Optional[RawSetting]:
+                        canonical_name: str,
+                        aliases: Optional[SettingAliases]) -> \
+            Optional[RawSetting]:
+        """
+        :param namespace: namespace for config name_or_alias, typically maps to
+            a SettingsDefinition class name
+        :param canonical_name: a string name, sources from either
+            SettingsDefinition property name.
+        :param aliases: options SettingAliases instance, specifies aliases from
+                    definition.
+        :return: RawSetting if found, else None
+        """
         raise NotImplementedError()
 
 
@@ -160,28 +171,39 @@ class CLISettingsSource(SettingsSource):
 
     def get_raw_setting(self,
                         namespace: Optional[str],
-                        name_or_alias: str) -> Optional[RawSetting]:
+                        canonical_name: str,
+                        aliases: Optional[SettingAliases]) -> \
+            Optional[RawSetting]:
         """
-
         :param namespace: namespace for config name_or_alias, typically maps to
             a SettingsDefinition class name
-        :param name_or_alias: a string name or alias, soruces from either
-            SettingsDefinition property name, or a defined alias.
+        :param canonical_name: a string name, sources from either
+            SettingsDefinition property name.
+        :param aliases: options SettingAliases instance, specifies aliases from
+            definition.
         :return: RawSetting if found, else None
         """
         result: Optional[RawSetting] = None
 
+        local_name = canonical_name
+
+        if aliases and aliases.flag:
+            local_name = aliases.flag
+
         if namespace:
-            canonical_form = f"{namespace}.{name_or_alias}"
+            canonical_form = f"{namespace}.{local_name}"
             result = self.raw_settings.get(canonical_form)
 
         if not result:
             # prop name only
-            result = self.raw_settings.get(name_or_alias)
+            result = self.raw_settings.get(local_name)
 
         if not result:
             # flag
-            result = self.raw_settings.get(name_or_alias[0])
+            flag = local_name[0]
+            if aliases and aliases.short_flag:
+                flag = aliases.short_flag
+            result = self.raw_settings.get(flag)
 
         return result
 
@@ -200,22 +222,36 @@ class EnvironSettingsSource(SettingsSource):
 
     def get_raw_setting(self,
                         namespace: Optional[str],
-                        name_or_alias: str) -> Optional[RawSetting]:
+                        canonical_name: str,
+                        aliases: Optional[SettingAliases]) -> \
+            Optional[RawSetting]:
+        """
+        :param namespace: namespace for config name_or_alias, typically maps to
+            a SettingsDefinition class name
+        :param canonical_name: a string name, sources from either
+            SettingsDefinition property name.
+        :param aliases: options SettingAliases instance, specifies aliases from
+            definition.
+        :return: RawSetting if found, else None
+        """
         result: Optional[RawSetting] = None
-        formatted_name_or_alias = camel_to_big_snake(name_or_alias)
+        local_name = canonical_name
+        if aliases and aliases.env_variable:
+            local_name = aliases.env_variable
+        formatted_name = camel_to_big_snake(local_name)
 
         # fully qualified name
         if namespace:
             formatted_namespace = camel_to_big_snake(namespace)
-            full_name = f"{formatted_namespace}__{formatted_name_or_alias}"
+            full_name = f"{formatted_namespace}__{formatted_name}"
             if full_name in self.raw_settings:
                 result = RawSetting(full_name, self.raw_settings[full_name])
 
         # check for short name
-        if formatted_name_or_alias in self.raw_settings:
+        if formatted_name in self.raw_settings:
             result = RawSetting(
-                formatted_name_or_alias,
-                self.raw_settings[formatted_name_or_alias])
+                formatted_name,
+                self.raw_settings[formatted_name])
 
         return result
 
@@ -238,7 +274,18 @@ class ConfigFileSource(SettingsSource):
 
     def get_raw_setting(self,
                         namespace: Optional[str],
-                        canonical_name: str) -> Optional[RawSetting]:
+                        canonical_name: str,
+                        aliases: Optional[SettingAliases]) -> \
+            Optional[RawSetting]:
+        """
+        :param namespace: namespace for config name_or_alias, typically maps to
+            a SettingsDefinition class name
+        :param canonical_name: a string name, sources from either
+            SettingsDefinition property name.
+        :param aliases: options SettingAliases instance, specifies aliases from
+            definition. Ignored in this implementation.
+        :return: RawSetting if found, else None
+        """
         if namespace is None:
             return None
 
@@ -296,19 +343,9 @@ class SettingsDefinition(object):
                 continue
             intermediate_results[name] = []
 
-            raw_setting: Optional[RawSetting] = None
             for source in settings_sources:
-                aliases = value.aliases.labels() if value.aliases else []
-                # try aliases first if specified
-                for alias in aliases:
-                    raw_setting = source.get_raw_setting(
-                        settings_class.__name__, alias)
-                    if raw_setting:
-                        break
-
-                if not raw_setting:
-                    raw_setting = source.get_raw_setting(
-                        settings_class.__name__, name)
+                raw_setting: Optional[RawSetting] = source.get_raw_setting(
+                    settings_class.__name__, name, value.aliases)
 
                 if raw_setting:
                     intermediate_results[name].append(raw_setting)
