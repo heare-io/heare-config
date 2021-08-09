@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 from distutils.core import setup
-import os
-from typing import Optional
 
 long_description = None
 with open('README.md', 'r') as fh:
@@ -16,4 +14,5 @@ setup(name='heare-config',
       author_email='seanfitz@heare.io',
       url='https://github.com/heare-io/heare-config',
       packages=['heare.config'],
+      setup_requires=['wheel']
       )

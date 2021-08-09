@@ -7,6 +7,8 @@ The Setting class will infer the type of the property from the default parser.
 
 ## Command line parsing
 ```python3
+from heare.config import SettingsDefinition, Setting
+
 class MyConfig(SettingsDefinition):
     foo = Setting(str)
     bar = Setting(float, default=1.0)
