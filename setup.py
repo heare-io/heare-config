@@ -7,7 +7,7 @@ with open('README.md', 'r') as fh:
     long_description = fh.read()
 
 setup(name='heare-config',
-      version='0.0.7',
+      version='0.0.7a',
       description='Heare.io Configuration Utilities',
       long_description=long_description,
       long_description_content_type="text/markdown",
