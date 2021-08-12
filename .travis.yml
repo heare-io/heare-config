@@ -9,7 +9,7 @@ python:
 script:
 - pytest
 - pycodestyle .
-- mypy heare tests
+- mypy heare_config tests
 - rst2html.py --exit-status 3 --report 3 README.md > /dev/null
 deploy:
   provider: pypi

@@ -4,4 +4,4 @@ cd "${TOP}"
 pytest "${TOP}"
 pycodestyle "${TOP}"
 mypy "${TOP}/heare" "${TOP}/tests"
-rst2html.py --exit-status 3 "${TOP}/README.md" > /dev/null
+rst2html.py --exit-status 3 --report 3 README.md > /dev/null

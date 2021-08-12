@@ -1,7 +1,7 @@
 import unittest
 import tempfile
 
-from heare.config import SettingsDefinition, \
+from heare_config import SettingsDefinition, \
     Setting, SettingAliases
 
 
