@@ -7,7 +7,7 @@ The Setting class will infer the type of the property from the default parser.
 
 ## Basic command line parsing
 ```python3
-from heare.config import SettingsDefinition, Setting
+from heare_config import SettingsDefinition, Setting
 
 class MyConfig(SettingsDefinition):
     foo = Setting(str)
@@ -29,7 +29,7 @@ By default, each setting property name is scoped by its definition class name, b
 
 ## Example Definition
 ```python3
-from heare.config import SettingsDefinition, Setting, SettingAliases
+from heare_config import SettingsDefinition, Setting, SettingAliases
 
 class MyConfig(SettingsDefinition):
     foo = Setting(str)
