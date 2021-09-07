@@ -14,6 +14,6 @@ setup(name='heare-config',
       author='Sean Fitzgerald',
       author_email='seanfitz@heare.io',
       url='https://github.com/heare-io/heare-config',
-      packages=['heare_config'],
+      packages=['heare.config'],
       setup_requires=['wheel']
       )
