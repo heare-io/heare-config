@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from heare_config import parse_cli_arguments
+from heare.config import parse_cli_arguments
 
 
 class TestCLIParsing(TestCase):
