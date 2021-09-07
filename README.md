@@ -1,6 +1,8 @@
 # heare-config
 Configuration library used by projects under heare.io
 
+[![Build Status](https://app.travis-ci.com/heare-io/heare-config.svg?branch=main)](https://app.travis-ci.com/heare-io/heare-config)
+
 # Usage
 heare-config allows developers to declare typed configuration using a code-as-schema syntax.
 The Setting class will infer the type of the property from the default parser.
