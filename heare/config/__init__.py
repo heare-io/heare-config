@@ -3,8 +3,8 @@ import os
 import re
 import sys
 from abc import ABCMeta, abstractmethod
+from collections import defaultdict
 from json import JSONEncoder
-from os import _Environ
 from typing import TypeVar, Generic, Callable, \
     Optional, List, Tuple, Union, Dict, Generator, Set
 import configparser
@@ -41,6 +41,9 @@ class JsonEncoder(JSONEncoder):
                or 'unserializable'
 
 
+SettingType = TypeVar('SettingType')
+
+
 class Setting(Generic[T]):
     def __init__(self,
                  formatter: Callable[[str], T],
@@ -49,7 +52,7 @@ class Setting(Generic[T]):
                  aliases: Optional[SettingAliases] = None):
         """
         Specify the schema for an individual configuration property.
-        :param formatter: parses a string value into
+        :param formatter: parses a string value into a parsed value of type T.
         :param default: default value if no configuration is specified
         :param required: indicates that this property is required
         """
@@ -67,10 +70,20 @@ class Setting(Generic[T]):
             )
 
     def __str__(self):
-        return JsonEncoder().encode(self.__dict__)
+        serializable = self.__dict__.copy()
+        serializable['__class__'] = self.__class__.__name__
+        return JsonEncoder().encode(serializable)
 
     def get(self) -> Optional[T]:
         return self.default
+
+    def to_gettable(self, value: List[T]):
+        return GettableSetting(
+            value,
+            self.formatter,
+            self.default,
+            self.required
+        )
 
 
 class GettableSetting(Setting[T]):
@@ -87,6 +100,66 @@ class GettableSetting(Setting[T]):
         self.value: Optional[T] = value
 
     def get(self) -> Optional[T]:
+        return self.value
+
+
+class ListSetting(Generic[T]):
+    def __init__(self,
+                 formatter: Callable[[str], T],
+                 default: Optional[List[T]] = None,
+                 required: bool = True,
+                 aliases: Optional[SettingAliases] = None):
+        """
+        Specify the schema for an individual configuration property.
+        :param formatter: parses the elements of a string value into
+        :param default: default value if no configuration is specified
+        :param required: indicates that this property is required
+        """
+        self.formatter: Callable[[str], T] = formatter
+        self.default: Optional[List[T]] = default
+        self.required: bool = required
+        self.aliases: Optional[SettingAliases] = aliases
+
+    def from_raw_value(self, value: str) -> List[T]:
+        result: List[T] = []
+        # ListSetting assumes values are CSV. Repeated command line flags
+        # must be treated specially, but will also work with csv values.
+        value_parts = value.split(",")  # TODO: Replace with csv lib?
+        for part in value_parts:
+            try:
+                result.append(self.formatter(part))
+            except Exception as _:
+                raise ValueError(
+                    f"{value} cannot be parsed as {self.formatter.__name__}"
+                )
+        return result
+
+    def get(self) -> Optional[List[T]]:
+        return self.default
+
+    def to_gettable(self, value: List[T]):
+        return GettableListSetting(
+            value,
+            self.formatter,
+            self.default,
+            self.required
+        )
+
+
+class GettableListSetting(ListSetting[T]):
+    def __init__(self,
+                 value: Optional[List[T]],
+                 formatter: Callable[[str], T],
+                 default: Optional[List[T]] = None,
+                 required: bool = True):
+        super().__init__(
+            formatter=formatter,
+            default=default,
+            required=required
+        )
+        self.value: Optional[List[T]] = value
+
+    def get(self) -> Optional[List[T]]:
         return self.value
 
 
@@ -136,21 +209,29 @@ class RawSetting(object):
         self.raw_name: str = raw_name
         self.raw_value: Union[str, bool] = raw_value
 
+    @staticmethod
+    def merge(raw_name: str, raw_settings: List['RawSetting']) -> 'RawSetting':
+        merged_value: str = ','.join([str(setting.raw_value)
+                                      for setting in raw_settings])
+        return RawSetting(raw_name, merged_value)
+
 
 class SettingsSource(metaclass=ABCMeta):
     @abstractmethod
     def get_raw_setting(self,
                         namespace: Optional[str],
                         canonical_name: str,
-                        aliases: Optional[SettingAliases]) -> \
+                        aliases: Optional[SettingAliases],
+                        as_list: bool = False) -> \
             Optional[RawSetting]:
         """
         :param namespace: namespace for config name_or_alias, typically maps to
             a SettingsDefinition class name
         :param canonical_name: a string name, sources from either
             SettingsDefinition property name.
-        :param aliases: options SettingAliases instance, specifies aliases from
-                    definition.
+        :param aliases: optional SettingAliases instance, specifies aliases
+            from definition.
+        :param as_list: whether to pull all existing matching values as a list.
         :return: RawSetting if found, else None
         """
         raise NotImplementedError()
@@ -159,7 +240,9 @@ class SettingsSource(metaclass=ABCMeta):
 class CLISettingsSource(SettingsSource):
     def __init__(self, args: List[str] = sys.argv):
         self.args = args
-        self.raw_settings = {rs.raw_name: rs for rs in self.load()}
+        self.raw_settings: Dict[str, List[RawSetting]] = defaultdict(list)
+        for rs in self.load():
+            self.raw_settings[rs.raw_name].append(rs)
 
     def load(self) -> List[RawSetting]:
         flag_arguments, positional = parse_cli_arguments(self.args)
@@ -172,7 +255,8 @@ class CLISettingsSource(SettingsSource):
     def get_raw_setting(self,
                         namespace: Optional[str],
                         canonical_name: str,
-                        aliases: Optional[SettingAliases]) -> \
+                        aliases: Optional[SettingAliases],
+                        as_list: bool = False) -> \
             Optional[RawSetting]:
         """
         :param namespace: namespace for config name_or_alias, typically maps to
@@ -181,31 +265,41 @@ class CLISettingsSource(SettingsSource):
             SettingsDefinition property name.
         :param aliases: options SettingAliases instance, specifies aliases from
             definition.
+        :param as_list: whether to pull all existing matching values as a list.
         :return: RawSetting if found, else None
         """
-        result: Optional[RawSetting] = None
+        intermediate_results: List[RawSetting] = []
 
         local_name = canonical_name
 
         if aliases and aliases.flag:
             local_name = aliases.flag
 
+        short_flag = local_name[0]
+        if aliases and aliases.short_flag:
+            short_flag = aliases.short_flag
+
+        forms = [
+            local_name,  # property name
+            short_flag,  # short flag
+        ]
+
         if namespace:
-            canonical_form = f"{namespace}.{local_name}"
-            result = self.raw_settings.get(canonical_form)
+            forms = [
+                        f"{namespace}.{local_name}",  # fully qualified form
+                    ] + forms
 
-        if not result:
-            # prop name only
-            result = self.raw_settings.get(local_name)
+        for form in forms:
+            candidates = self.raw_settings.get(form)
+            if as_list and candidates is not None:
+                intermediate_results.append(RawSetting.merge(form, candidates))
+            elif candidates and len(candidates) > 0:
+                intermediate_results.append(candidates[-1])
 
-        if not result:
-            # flag
-            flag = local_name[0]
-            if aliases and aliases.short_flag:
-                flag = aliases.short_flag
-            result = self.raw_settings.get(flag)
-
-        return result
+        if intermediate_results and len(intermediate_results) > 1:
+            raise ValueError(f"Multiple forms of {forms[0]} used in CLI "
+                             f"arguments, an illegal combination.")
+        return intermediate_results[0] if intermediate_results else None
 
 
 def camel_to_big_snake(name):
@@ -213,7 +307,7 @@ def camel_to_big_snake(name):
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).upper()
 
 
-FlexibleEnvironType = Union[_Environ, Dict[str, str]]
+FlexibleEnvironType = Union[os._Environ, Dict[str, str]]
 
 
 class EnvironSettingsSource(SettingsSource):
@@ -223,7 +317,8 @@ class EnvironSettingsSource(SettingsSource):
     def get_raw_setting(self,
                         namespace: Optional[str],
                         canonical_name: str,
-                        aliases: Optional[SettingAliases]) -> \
+                        aliases: Optional[SettingAliases],
+                        as_list: bool = False) -> \
             Optional[RawSetting]:
         """
         :param namespace: namespace for config name_or_alias, typically maps to
@@ -232,6 +327,7 @@ class EnvironSettingsSource(SettingsSource):
             SettingsDefinition property name.
         :param aliases: options SettingAliases instance, specifies aliases from
             definition.
+        :param as_list: whether to pull all existing matching values as a list.
         :return: RawSetting if found, else None
         """
         result: Optional[RawSetting] = None
@@ -275,7 +371,8 @@ class ConfigFileSource(SettingsSource):
     def get_raw_setting(self,
                         namespace: Optional[str],
                         canonical_name: str,
-                        aliases: Optional[SettingAliases]) -> \
+                        aliases: Optional[SettingAliases],
+                        as_list: bool = False) -> \
             Optional[RawSetting]:
         """
         :param namespace: namespace for config name_or_alias, typically maps to
@@ -284,6 +381,7 @@ class ConfigFileSource(SettingsSource):
             SettingsDefinition property name.
         :param aliases: options SettingAliases instance, specifies aliases from
             definition. Ignored in this implementation.
+        :param as_list: whether to pull all existing matching values as a list.
         :return: RawSetting if found, else None
         """
         if namespace is None:
@@ -335,17 +433,19 @@ class SettingsDefinition(object):
         intermediate_results: Dict[str, List[RawSetting]] = dict()
 
         for name, value in settings_class.__dict__.items():
-            if isinstance(value, Setting):
+            if isinstance(value, Setting) or isinstance(value, ListSetting):
                 setting_specs[name] = (name, value)
 
         for name, value in settings_class.__dict__.items():
-            if not isinstance(value, Setting):
+            if not (isinstance(value, Setting) or isinstance(value,
+                                                             ListSetting)):
                 continue
             intermediate_results[name] = []
 
             for source in settings_sources:
                 raw_setting: Optional[RawSetting] = source.get_raw_setting(
-                    settings_class.__name__, name, value.aliases)
+                    settings_class.__name__, name, value.aliases,
+                    as_list=isinstance(value, ListSetting))
 
                 if raw_setting:
                     intermediate_results[name].append(raw_setting)
@@ -365,11 +465,8 @@ class SettingsDefinition(object):
 
             setattr(
                 result,
-                name, GettableSetting(
-                    value=setting_spec.from_raw_value(value),
-                    formatter=setting_spec.formatter,
-                    default=setting_spec.default,
-                    required=setting_spec.required
+                name, setting_spec.to_gettable(
+                    setting_spec.from_raw_value(value)
                 )
             )
 

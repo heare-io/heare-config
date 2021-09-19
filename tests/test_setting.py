@@ -2,7 +2,7 @@ import unittest
 import tempfile
 
 from heare.config import SettingsDefinition, \
-    Setting, SettingAliases
+    Setting, SettingAliases, ListSetting
 
 
 class SettingsDefinitionTests(unittest.TestCase):
@@ -126,6 +126,66 @@ class SettingsDefinitionTests(unittest.TestCase):
 
             self.assertEqual(result.foo.get(), "bar")
             self.assertEqual(result.bar.get(), 1.0)
+
+
+class ListSettingTests(unittest.TestCase):
+    def test_load(self):
+        class MySettings(SettingsDefinition):
+            foo = ListSetting(str)
+            bar = ListSetting(float, 1.0)
+            baz = ListSetting(int)
+            bing = ListSetting(float)
+
+        args = [
+            '--foo=bar',  # as string list with single el
+            '--bar=2.0',  # as float list with single el
+            '--baz=1,2,3',  # as int list with 3 el (csv)
+            '--bing=1.0',  # as float list with 2 el
+            '--bing=2.0']
+
+        result = MySettings.load(args)
+        self.assertTrue(isinstance(result, MySettings))
+        self.assertEqual(['bar'], result.foo.get())
+        self.assertEqual([2.0], result.bar.get())
+        self.assertEqual([1, 2, 3], result.baz.get())
+        self.assertEqual([1.0, 2.0], result.bing.get())
+
+    def test_convoluted_cli(self):
+        class MySettings(SettingsDefinition):
+            foo = ListSetting(str)
+
+        args = [
+            '--foo=bar',
+            '-f=2.0',
+            '--MySettings.foo=1,2,3']
+
+        with self.assertRaises(ValueError):
+            MySettings.load(args)
+
+    def test_config_file_parser(self):
+        class MySettings(SettingsDefinition):
+            foo = ListSetting(str,
+                              aliases=SettingAliases(
+                                  short_flag='f',
+                                  env_variable='FOO'))
+            bar = ListSetting(float,
+                              aliases=SettingAliases(
+                                  short_flag='b',
+                                  env_variable='BAR'))
+
+        with tempfile.NamedTemporaryFile() as config_file:
+            config_file.write(b"""
+            [MySettings]
+            foo = bar,baz,bing
+            bar = 1.0,2.0
+            """)
+
+            config_file.flush()
+
+            result = MySettings.load(config_files=[config_file.name])
+
+            self.assertEqual(result.foo.get(), ["bar", "baz", "bing"])
+            self.assertEqual(result.bar.get(), [1.0, 2.0])
 
 
 class SettingTypingTests(unittest.TestCase):
