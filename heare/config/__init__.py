@@ -330,26 +330,33 @@ class EnvironSettingsSource(SettingsSource):
         :param as_list: whether to pull all existing matching values as a list.
         :return: RawSetting if found, else None
         """
-        result: Optional[RawSetting] = None
         local_name = canonical_name
         if aliases and aliases.env_variable:
             local_name = aliases.env_variable
         formatted_name = camel_to_big_snake(local_name)
+
+        forms = []
 
         # fully qualified name
         if namespace:
             formatted_namespace = camel_to_big_snake(namespace)
             full_name = f"{formatted_namespace}__{formatted_name}"
             if full_name in self.raw_settings:
-                result = RawSetting(full_name, self.raw_settings[full_name])
+                forms.append(RawSetting(
+                    full_name, self.raw_settings[full_name]))
 
         # check for short name
         if formatted_name in self.raw_settings:
-            result = RawSetting(
+            forms.append(RawSetting(
                 formatted_name,
-                self.raw_settings[formatted_name])
-
-        return result
+                self.raw_settings[formatted_name]))
+        if len(forms) == 1:
+            return forms[0]
+        elif len(forms) > 1:
+            raise ValueError(f"Multiple forms of {forms[0]} in environment "
+                             f"variables, an illegal combination.")
+        else:
+            return None
 
 
 class ConfigFileSource(SettingsSource):
@@ -433,13 +440,11 @@ class SettingsDefinition(object):
         intermediate_results: Dict[str, List[RawSetting]] = dict()
 
         for name, value in settings_class.__dict__.items():
-            if isinstance(value, Setting) or isinstance(value, ListSetting):
-                setting_specs[name] = (name, value)
-
-        for name, value in settings_class.__dict__.items():
-            if not (isinstance(value, Setting) or isinstance(value,
-                                                             ListSetting)):
+            if not (isinstance(value, Setting)
+                    or isinstance(value, ListSetting)):
                 continue
+
+            setting_specs[name] = (name, value)
             intermediate_results[name] = []
 
             for source in settings_sources:
