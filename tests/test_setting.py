@@ -42,6 +42,30 @@ class SettingsDefinitionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MySettings.load(args)
 
+    def test_convoluted_cli(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str)
+
+        args = [
+            '--foo=bar',
+            '-f=2.0',
+            '--MySettings.foo=1,2,3']
+
+        with self.assertRaises(ValueError):
+            MySettings.load(args)
+
+    def test_convoluted_env(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str)
+
+        env = {
+            'MySettings.foo': 'foo',
+            'foo': 'bar'
+        }
+
+        with self.assertRaises(ValueError):
+            MySettings.load(env=env)
+
     def test_unkown_flags_ignored(self):
         class MySettings(SettingsDefinition):
             foo = Setting(str)
