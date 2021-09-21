@@ -27,11 +27,12 @@ The `ListSetting` is a version of `Setting` that yields results as a list. Usage
 from heare.config import SettingsDefinition, ListSetting, SettingAliases
 
 class MyListConfig(SettingsDefinition):
-    numbers = ListSetting(int, aliases=SettingAliases(
+    numbers = ListSetting(int, default=[], aliases=SettingAliases(
         flag='number'
     ))
 
 config: MyListConfig = MyListConfig.load()
+config.numbers.get()  # []
 ```
 
 ## Default Invocation
@@ -66,12 +67,13 @@ $ ./main.py -f FOO -b 10.0
 ```
 *Note:* It is invalid to mix formats of command line flags in a single invocation. The following example will yield a runtime error.
 ```shell
-$ ./main.py --MyListConfig.number 1 --number 2
+$ ./main.py --MyListConfig.number 1 --number 2  # foo == [1, 2]
 ```
 
-*Note:* As the parser share a common utility class, it is technically possible to merge multiple ListSettings together by use of multiple csv values for a flag. This is not considered a best practice, may be deprecated in a future refactoring.
+*Note:* As the parsers share a common utility class, it is technically possible to merge multiple ListSettings together by use of multiple csv values for a flag. 
+This is not considered a best practice, and may be deprecated in a future refactoring.
 ```shell
-$ ./main.py --number 1,2,3 --number 4,5,6
+$ ./main.py --number 1,2,3 --number 4,5,6  # foo = [1,2,3,4,5,6]
 ```
 
 ### Environment Variables
@@ -81,8 +83,11 @@ Environment variables address config by converting component names to upper snak
 $ MY_CONFIG__FOO="value" MY_CONFIG__BAR="10.0" ./main.py
 $ FOO="value" BAR="10.0" ./main.py
 ```
+*Note:* At this time, quotations and other escape characters are not supported.
+
 #### Multiple Values with ListSettings
 Environment Variables allow for multiple values to be specified for a single property using comma-separated values. 
+
 
 ```shell
 # environment variables
@@ -90,6 +95,7 @@ $ MY_LIST_CONFIG__NUMBERS="1,2,3" ./main.py
 $ NUMBERS="1,2,3" ./main.py
 ```
 *Note:* At this time, quotations and other escape characters are not supported.
+
 *Note:* It is invalid to mix formats of environment variables in a single invocation. Values will be set based on [`precedence`](#Precedence).
 
 ### Config Files
@@ -132,7 +138,8 @@ A `Setting` specified via the CLI will take the last value specified at the comm
 $ ./main.py --foo bar --foo baz  # MyConfig.foo == "baz" 
 ```
 
-A `ListSetting` specified via the CLI will collect values specified at the command line, with the notable exception that mixed formats are not allowed.
+A `ListSetting` specified via the CLI will collect values specified at the command line, with the notable exception that mixed formats are 
+[not allowed](#Collisions).
 
 #### Environment Variables for Settings and ListSettings
 Environment variables cannot contain multiple values within a single shell session. The most recent assignment of the variable specifies the value.
@@ -204,7 +211,7 @@ all_settings:Dict[type, SettingsDefinition] = {
 }
 ```
 
-### Naming Collisions with Multiple SettingsDefinitions
+### <a name="Collisions"></a>Naming Collisions with Multiple SettingsDefinitions
 Property reuse is encouraged, but ambiguity is discouraged. As noted above, it is illegal to specify multiple formats of a Setting in a single invocation.
 Across settings sources, precedence handles this cleanly, however within a single source there is the potential for ambiguity.
 
