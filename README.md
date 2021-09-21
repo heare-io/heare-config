@@ -227,7 +227,7 @@ class MySecondConfig(SettingsDefinition):
     foo = Setting(str)
 ```
 ```shell
-$ ./main.py --MyFirstConfig.foo=bar foo=baz
+$ ./main.py --MyFirstConfig.foo=bar --foo=baz
 ```
 
 In the above scenario, it's not clear whether the `--foo` setting should be a member of `MyFirstConfig.foo` or not. While this will more clearly fail
