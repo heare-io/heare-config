@@ -33,6 +33,17 @@ class SettingAliases(object):
         return list(filter(None,
                            [self.flag, self.short_flag, self.env_variable]))
 
+    def __str__(self) -> str:
+        parts = [
+            f"<{self.__class__.__module__}.{self.__class__.__name__}",
+            f"addr={hex(id(self))}"
+        ]
+        for k, v in self.__dict__.items():
+            if v:
+                parts += [f"{k}={v}"]
+        parts += ["/>"]
+        return ' '.join(parts)
+
 
 class JsonEncoder(JSONEncoder):
     def default(self, o):
@@ -69,10 +80,16 @@ class Setting(Generic[T]):
                 f"{value} cannot be parsed as {self.formatter.__name__}"
             )
 
-    def __str__(self):
-        serializable = self.__dict__.copy()
-        serializable['__class__'] = self.__class__.__name__
-        return JsonEncoder().encode(serializable)
+    def __str__(self) -> str:
+        parts = [
+            f"<{self.__class__.__module__}.{self.__class__.__name__}",
+            f"addr={hex(id(self))}"
+        ]
+        for k, v in self.__dict__.items():
+            if v:
+                parts += [f"{k}={v}"]
+        parts += ["/>"]
+        return ' '.join(parts)
 
     def get(self) -> Optional[T]:
         return self.default
@@ -144,6 +161,17 @@ class ListSetting(Generic[T]):
             self.default,
             self.required
         )
+
+    def __str__(self) -> str:
+        parts = [
+            f"<{self.__class__.__module__}.{self.__class__.__name__}",
+            f"addr={hex(id(self))}"
+        ]
+        for k, v in self.__dict__.items():
+            if v:
+                parts += [f"{k}={v}"]
+        parts += ["/>"]
+        return ' '.join(parts)
 
 
 class GettableListSetting(ListSetting[T]):

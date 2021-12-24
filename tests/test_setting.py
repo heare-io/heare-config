@@ -18,6 +18,13 @@ class SettingsDefinitionTests(unittest.TestCase):
         self.assertEqual('bar', result.foo.get())
         self.assertEqual(2.0, result.bar.get())
 
+    def test_missing_required(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str)
+
+        with self.assertRaises(ValueError) as ve:
+            MySettings.load(args=[])
+
     def test_default(self):
         class MySettings(SettingsDefinition):
             foo = Setting(str)
@@ -66,7 +73,7 @@ class SettingsDefinitionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MySettings.load(env=env)
 
-    def test_unkown_flags_ignored(self):
+    def test_unknown_flags_ignored(self):
         class MySettings(SettingsDefinition):
             foo = Setting(str)
 
