@@ -39,3 +39,15 @@ class TestCLIParsing(TestCase):
             ('ssl', 'TRUE'),
             ('tls', '')
         ], parsed)
+
+    def test_underscore_translation(self):
+        args = [
+            '--cool-flag',
+            '--cooler_flag'
+        ]
+
+        parsed, position = parse_cli_arguments(args)
+        self.assertListEqual([
+            ('cool_flag', 'TRUE'),
+            ('cooler_flag', 'TRUE')
+        ], parsed)
