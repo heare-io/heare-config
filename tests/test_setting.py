@@ -39,6 +39,17 @@ class SettingsDefinitionTests(unittest.TestCase):
         self.assertEqual(1.0, result.bar.get())
         self.assertTrue(result.baz.get())
 
+    def test_cli_underscores_to_hyphens(self):
+        class MySettings(SettingsDefinition):
+            foo_bar = Setting(str)
+
+        args = ['--foo_bar=baz']
+        result = MySettings.load(args)
+        self.assertEqual('baz', result.foo_bar.get())
+        args = ['--foo-bar=baz']
+        result = MySettings.load(args)
+        self.assertEqual('baz', result.foo_bar.get())
+
     def test_bad_parser(self):
         class MySettings(SettingsDefinition):
             foo = Setting(str)

@@ -217,6 +217,9 @@ def parse_cli_arguments(args: List[str]) -> \
                     idx += 1
             else:
                 value = parts[1].strip()
+            # translate hyphens to underscores to match
+            # syntax requirements
+            flag = flag.replace('-', '_')
             results.append((flag, value))
         idx += 1
 
