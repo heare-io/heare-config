@@ -12,6 +12,13 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: 3.9
+    - name: Install test dependencies
+      run: >-
+        python -m
+        pip install
+        -r requirements.txt
+    - name: Run tests and linter
+      run: ./scripts/validate.sh
     - name: Install pypa/build
       run: >-
         python -m
