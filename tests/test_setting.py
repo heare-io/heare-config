@@ -1,5 +1,6 @@
 import unittest
 import tempfile
+from typing import Callable, List
 
 from heare.config import SettingsDefinition, \
     Setting, SettingAliases, ListSetting
@@ -247,3 +248,19 @@ class SettingTypingTests(unittest.TestCase):
         bar: float = result.bar.get()
         self.assertEqual('bar', foo)
         self.assertEqual(1.0, bar)
+
+    def test_complex_type_with_default(self):
+        def custom_formatter(s: str) -> Callable[[List[str]], None]:
+            def flop(o: List[str]) -> None:
+                print(f"Reversed: {','.join(reversed(o))}")
+
+            return flop
+
+        def formatted(strs: List[str]) -> None:
+            print(','.join(strs))
+
+        class MySettings(SettingsDefinition):
+            foo = Setting(custom_formatter, default=formatted)
+
+        settings = MySettings.load(args=[])
+        self.assertEqual(formatted, settings.foo.get())

@@ -496,13 +496,14 @@ class SettingsDefinition(object):
                     f"Required config not satisfied: {name}, {setting_spec}"
                 )
 
-            value = setting_spec.default if \
-                not setting_candidates else setting_candidates[0].raw_value
+            value = setting_spec.default
+            if setting_candidates:
+                value = setting_spec.from_raw_value(setting_candidates[0].raw_value)
 
             setattr(
                 result,
                 name, setting_spec.to_gettable(
-                    setting_spec.from_raw_value(value)
+                    value
                 )
             )
 
