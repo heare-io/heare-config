@@ -2,6 +2,7 @@ import copy
 import os
 import re
 import sys
+import typing
 from abc import ABCMeta, abstractmethod
 from collections import defaultdict
 from json import JSONEncoder
@@ -141,7 +142,7 @@ class ListSetting(Generic[T]):
         result: List[T] = []
         # ListSetting assumes values are CSV. Repeated command line flags
         # must be treated specially, but will also work with csv values.
-        value_parts = value.split(",")  # TODO: Replace with csv lib?
+        value_parts = value.split(",") if isinstance(value, str) else [value]
         for part in value_parts:
             try:
                 result.append(self.formatter(part))
@@ -496,9 +497,15 @@ class SettingsDefinition(object):
                     f"Required config not satisfied: {name}, {setting_spec}"
                 )
 
-            value = setting_spec.default
             if setting_candidates:
-                value = setting_spec.from_raw_value(setting_candidates[0].raw_value)
+                if isinstance(setting_candidates[0].raw_value, bool):
+                    value = setting_candidates[0].raw_value
+                else:
+                    value = setting_spec.from_raw_value(
+                        setting_candidates[0].raw_value
+                    )
+            else:
+                value = setting_spec.default
 
             setattr(
                 result,
