@@ -383,11 +383,8 @@ class EnvironSettingsSource(SettingsSource):
             forms.append(RawSetting(
                 formatted_name,
                 self.raw_settings[formatted_name]))
-        if len(forms) == 1:
+        if len(forms) > 0:
             return forms[0]
-        elif len(forms) > 1:
-            raise ValueError(f"Multiple forms of {forms[0]} in environment "
-                             f"variables, an illegal combination.")
         else:
             return None
 

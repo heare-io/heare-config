@@ -145,6 +145,19 @@ class SettingsDefinitionTests(unittest.TestCase):
         self.assertFalse(result.bar.get())
         self.assertEqual('bar', result.foo.get())
 
+    def test_env_variable_naming_precedence(self):
+        class MySettings(SettingsDefinition):
+            foo = Setting(str,
+                          aliases=SettingAliases(
+                              short_flag='f',
+                              env_variable='FOO'))
+
+        args = []
+
+        result = MySettings.load(args=args, env={'FOO': 'bar', 'MY_SETTINGS__FOO': 'FOO'})
+
+        self.assertEqual('FOO', result.foo.get())
+
     def test_config_file_parser(self):
         class MySettings(SettingsDefinition):
             foo = Setting(str,
