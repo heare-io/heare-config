@@ -1,4 +1,5 @@
 import copy
+import glob
 import os
 import re
 import sys
@@ -449,14 +450,32 @@ class SettingsDefinition(object):
 
     @classmethod
     def load(cls,
-             args: List[str] = sys.argv,
+             args: Union[List[str], None] = None,
              env: FlexibleEnvironType = os.environ,
-             config_files: List[str] = []):
+             config_files: Union[List[str], None] = None):
         sources: List[SettingsSource] = []
+
+        if not args:
+            args = sys.argv
+
+        if not config_files:
+            config_files = []
+            # check environ config
+            # this is a PATH-like string, containing either files or directories
+            # directories are not traversed recursively
+            env_var = os.environ.get('HEARE_CONFIG_PATH', '')
+            parts = env_var.split(os.pathsep)
+            for part in parts:
+                if os.path.isdir(part):
+                    for f in glob.glob(part + os.path.sep + '*.ini'):
+                        config_files.append(f)
+                if os.path.isfile(part):
+                    config_files.append(part)
 
         for file in config_files:
             if os.path.exists(file):
                 sources.append(ConfigFileSource.from_filename(file))
+
         if env:
             sources.append(EnvironSettingsSource(env))
         if args:
