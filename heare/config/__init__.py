@@ -517,9 +517,14 @@ class SettingsDefinition(object):
                 if isinstance(setting_candidates[0].raw_value, bool):
                     value = setting_candidates[0].raw_value
                 else:
-                    value = setting_spec.from_raw_value(
-                        setting_candidates[0].raw_value
-                    )
+                    try:
+                        value = setting_spec.from_raw_value(
+                            setting_candidates[0].raw_value
+                        )
+                    except ValueError as ex:
+                        raise ValueError(
+                            f"Error parsing value of {result.__class__.__name__}.{name}: {ex}"
+                        )
             else:
                 value = setting_spec.default
 
